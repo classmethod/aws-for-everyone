@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudWatch Template
+Parameters:
+  ECSClusterName:
+    Type: String
+    Default: default
+    Description: ECS Cluster Name.
+  ECSTaskName:
+    Type: String
+    Default: first-run-task-definition
+    Description: ECS Task Name.
+  Email:
+    Type: String
+    Default: user1@example.com
+    Description: Email Address for notification.
+
+Resources:
+  AnomalyDetectorCpuUtilization:
+    Type: AWS::CloudWatch::AnomalyDetector
+    Properties:
+      MetricName: CpuUtilized
+      Namespace: ECS/ContainerInsights
+      Stat: Average 
+      Dimensions:
+        - Name: TaskDefinitionFamily
+          Value: !Ref ECSTaskName
+        - Name: ClusterName
+          Value: !Ref ECSClusterName
+  ECSTaskCpuUtilizationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Cpu Utilization Alarm for ECS Task
+      AlarmName: !Sub CpuUtilizationAlarm-${ECSClusterName}-${ECSTaskName}
+      AlarmActions : 
+      - !Ref AlarmNotificationTopic
+      ComparisonOperator: GreaterThanUpperThreshold
+      EvaluationPeriods: 1
+      Metrics:
+      - Expression: ANOMALY_DETECTION_BAND(m1, 2)
+        Id: ad1
+      - Id: m1
+        MetricStat:
+          Metric:
+            MetricName: CpuUtilized
+            Namespace: ECS/ContainerInsights
+            Dimensions:
+              - Name: TaskDefinitionFamily
+                Value: !Ref ECSTaskName
+              - Name: ClusterName
+                Value: !Ref ECSClusterName
+          Period: !!int 60
+          Stat: Average
+      ThresholdMetricId: ad1
+  AlarmNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Endpoint: !Ref Email
+          Protocol: email

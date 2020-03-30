@@ -1,0 +1,265 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: VPC Network Template
+
+# ------------------------------------------------------------#
+#  Parameters
+# ------------------------------------------------------------#
+Parameters:
+  SystemName:
+    Type: String
+    Description: Your System Name.
+
+Resources:
+# ------------------------------------------------------------#
+#  VPC
+# ------------------------------------------------------------#
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      InstanceTenancy: default
+      Tags:
+      - Key: Name
+        Value: !Sub ${SystemName}-VPC
+
+# ------------------------------------------------------------#
+#  InternetGateway
+# ------------------------------------------------------------#
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: !Sub ${SystemName}-IGW
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+# ------------------------------------------------------------#
+#  Subnet
+# ------------------------------------------------------------#
+  PublicSubnet1a:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: 'true'
+      Tags:
+      - Key: Name
+        Value: !Sub ${SystemName}-Public-Subnet-1a
+      VpcId: !Ref VPC
+  PublicSubnet1c:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: ap-northeast-1c
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: 'true'
+      Tags:
+      - Key: Name
+        Value: !Sub ${SystemName}-Public-Subnet-1c
+      VpcId: !Ref VPC
+  PrivateSubnet1a:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      CidrBlock: 10.0.10.0/24
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+      - Key: Name
+        Value: !Sub ${SystemName}-Private-Subnet-1a
+      VpcId: !Ref VPC
+  PrivateSubnet1c:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: ap-northeast-1c
+      CidrBlock: 10.0.11.0/24
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+      - Key: Name
+        Value: !Sub ${SystemName}-Private-Subnet-1c
+      VpcId: !Ref VPC
+  PrivateSubnet2a:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      CidrBlock: 10.0.20.0/24
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+      - Key: Name
+        Value: !Sub ${SystemName}-Private-Subnet-2c
+      VpcId: !Ref VPC
+  PrivateSubnet2c:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: ap-northeast-1c
+      CidrBlock: 10.0.21.0/24
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+      - Key: Name
+        Value: !Sub ${SystemName}-Private-Subnet-2c
+      VpcId: !Ref VPC
+
+# ------------------------------------------------------------#
+#  ElasticIP, NatGateway
+# ------------------------------------------------------------#
+  EIP1a:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  NAT1a:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - EIP1a
+          - AllocationId
+      SubnetId: !Ref PublicSubnet1a
+      Tags:
+        - Key: Name
+          Value: !Sub ${SystemName}-ngw-1a
+  EIP1c:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  NAT1c:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - EIP1c
+          - AllocationId
+      SubnetId: !Ref PublicSubnet1c
+      Tags:
+        - Key: Name
+          Value: !Sub ${SystemName}-ngw-1c
+
+# ------------------------------------------------------------#
+#  RouteTable
+# ------------------------------------------------------------#
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: AttachGateway
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: !Sub ${SystemName}-Public-RT
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PrivateRouteTable1a:
+    Type: AWS::EC2::RouteTable
+    DependsOn: NAT1a
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: !Sub ${SystemName}-Private-RT1a
+  PrivateRoute1a:
+    Type: AWS::EC2::Route
+    DependsOn: NAT1a
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1a
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NAT1a
+  PrivateRouteTable1c:
+    Type: AWS::EC2::RouteTable
+    DependsOn: NAT1c
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: !Sub ${SystemName}-Private-RT1c
+  PrivateRoute1c:
+    Type: AWS::EC2::Route
+    DependsOn: NAT1c
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1c
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NAT1c
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: !Sub ${SystemName}-Private-RT2
+
+  PublicSubnet1aRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1a
+      RouteTableId: !Ref PublicRouteTable
+  PublicSubnet1cRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1c
+      RouteTableId: !Ref PublicRouteTable
+  PrivateSubnet1aRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1a
+      RouteTableId: !Ref PrivateRouteTable1a
+  PrivateSubnet1cRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1c
+      RouteTableId: !Ref PrivateRouteTable1c
+  PrivateSubnet2aRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2a
+      RouteTableId: !Ref PrivateRouteTable2
+  PrivateSubnet2cRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2c
+      RouteTableId: !Ref PrivateRouteTable2
+
+# ------------------------------------------------------------#
+#  Outputs
+# ------------------------------------------------------------#
+Outputs:
+  VPC:
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${SystemName}-VPC
+  PublicSubnet1a:
+    Value: !Ref PublicSubnet1a
+    Export:
+      Name: !Sub ${SystemName}-PublicSubnet1a
+  PublicSubnet1c:
+    Value: !Ref PublicSubnet1c
+    Export:
+      Name: !Sub ${SystemName}-PublicSubnet1c
+  PrivateSubnet1a:
+    Value: !Ref PrivateSubnet1a
+    Export:
+      Name: !Sub ${SystemName}-PrivateSubnet1a
+  PrivateSubnet1c:
+    Value: !Ref PrivateSubnet1c
+    Export:
+      Name: !Sub ${SystemName}-PrivateSubnet1c
+  PrivateSubnet2a:
+    Value: !Ref PrivateSubnet2a
+    Export:
+      Name: !Sub ${SystemName}-PrivateSubnet2a
+  PrivateSubnet2c:
+    Value: !Ref PrivateSubnet2c
+    Export:
+      Name: !Sub ${SystemName}-PrivateSubnet2c

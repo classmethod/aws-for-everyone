@@ -1,0 +1,251 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CodePipeline For ECS Fargate with CodeCommit
+
+# ------------------------------------------------------------#
+#  Parameters
+# ------------------------------------------------------------#
+Parameters:
+  SystemName:
+    Type: String
+    Description: Your System Name.
+
+Resources:
+# ------------------------------------------------------------#
+#  IAM
+# ------------------------------------------------------------#
+  #-- CodeBuild用Role --#
+  appCodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+
+  #-- CodePipeline用Role --#
+  appCodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PipelinePolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource:
+                  - !Sub arn:aws:s3:::${ArtifactBucket}/*
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:GetBucketVersioning
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - codecommit:GetRepository
+                  - codecommit:ListBranches
+                  - codecommit:GetUploadArchiveStatus
+                  - codecommit:UploadArchive
+                  - codecommit:CancelUploadArchive
+                  - codedeploy:CreateDeployment
+                  - codedeploy:GetApplication
+                  - codedeploy:GetApplicationRevision
+                  - codedeploy:GetDeployment
+                  - codedeploy:GetDeploymentConfig
+                  - codedeploy:RegisterApplicationRevision
+                  - codebuild:StartBuild
+                  - codebuild:StopBuild
+                  - codebuild:BatchGet*
+                  - codebuild:Get*
+                  - codebuild:List*
+                  - codecommit:GetBranch
+                  - codecommit:GetCommit
+                  - s3:*
+                  - ecs:*
+                  - elasticloadbalancing:*
+                  - autoscaling:*
+                  - iam:PassRole
+
+# ------------------------------------------------------------#
+#  S3
+# ------------------------------------------------------------#
+  #-- アーティファクト用S3バケット --#
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+
+# ------------------------------------------------------------#
+#  CodeBuild
+# ------------------------------------------------------------#
+  appCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${SystemName}-app-build-project
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: !Sub Building stage for php app
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+          - Name: IMAGE_NAME
+            Value: !Sub ${SystemName}-ecr-php-app
+          - Name: CONTAINER_NAME
+            Value: !Sub app
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:2.0
+        Type: LINUX_CONTAINER
+        PrivilegedMode: True
+      ServiceRole: !Ref appCodeBuildServiceRole
+      Source:
+        Type: CODEPIPELINE
+      TimeoutInMinutes: 30
+
+# ------------------------------------------------------------#
+#  CodePipeline
+# ------------------------------------------------------------#
+  #-- CodePipeline起動用CloudWatchEvents --#
+  appCloudWatchEventRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: cwe-pipeline-execution
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 'codepipeline:StartPipelineExecution'
+                Resource: !Join 
+                  - ''
+                  - - 'arn:aws:codepipeline:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':'
+                    - !Ref appCodePipeline
+
+  #-- CodePipeline起動用CloudWatchEvents --#
+  appCloudwatchEventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source:
+          - aws.codecommit
+        detail-type:
+          - CodeCommit Repository State Change
+        resources:
+          - Fn::ImportValue: !Sub ${SystemName}-codecommit-php-app-arn
+        detail:
+          event:
+            - referenceCreated
+            - referenceUpdated
+          referenceType:
+            - branch
+          referenceName:
+          - master
+      Targets:
+        - Arn:  !Join 
+          - ''
+          - - 'arn:aws:codepipeline:'
+            - !Ref 'AWS::Region'
+            - ':'
+            - !Ref 'AWS::AccountId'
+            - ':'
+            - !Ref appCodePipeline
+          Id: !Sub ${SystemName}-app-codepipeline
+          RoleArn: !GetAtt appCloudWatchEventRole.Arn
+
+  #-- CodePipeline --#
+  appCodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    DependsOn: ArtifactBucket
+    Properties:
+      ArtifactStore:
+        Location: !Ref ArtifactBucket
+        Type: S3
+      Name: !Sub ${SystemName}-app-codepipeline
+      RestartExecutionOnUpdate: false
+      RoleArn: !GetAtt appCodePipelineServiceRole.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId: 
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: 1
+              OutputArtifacts: 
+                - Name: SourceOutput
+              Configuration: 
+                RepositoryName:
+                  Fn::ImportValue: !Sub ${SystemName}-codecommit-php-app-name
+                BranchName: master
+                PollForSourceChanges: false
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: CodeBuild
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId: 
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration: 
+                ProjectName: !Ref appCodeBuildProject
+              OutputArtifacts: 
+                - Name: CodebuildOutput
+              RunOrder: 1
+        - Name: Deploy
+          Actions:
+            - Name: appDeploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: ECS
+              Configuration:
+                ClusterName:
+                  Fn::ImportValue: !Sub ${SystemName}-cluster
+                ServiceName:
+                  Fn::ImportValue: !Sub ${SystemName}-app-service
+                FileName: imagedefinitions.json
+              RunOrder: 1
+              InputArtifacts:
+                - Name: CodebuildOutput
+
+
+# ------------------------------------------------------------#
+# Outputs
+# ------------------------------------------------------------#
+Outputs:
+  ArtifactBucket:
+    Value: !Ref ArtifactBucket
+    Export:
+      Name: !Sub ${SystemName}-ArtifactBucket

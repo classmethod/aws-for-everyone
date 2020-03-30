@@ -1,0 +1,139 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Security Groups"
+
+# ------------------------------------------------------------#
+# Parameters
+# ------------------------------------------------------------#
+Parameters:
+  SystemName:
+    Type: String
+    Description: Your System Name.
+
+  AdminIpaddress:
+    Type: String
+    Description: Your Administrator IP Address.
+
+Resources:
+# ------------------------------------------------------------#
+# Security Groups
+# ------------------------------------------------------------#
+#-- app-alb-sg --#
+  appAlbSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${SystemName}-app-alb-sg"
+      GroupDescription: !Sub "${SystemName}-app-alb-sg"
+      VpcId:
+        Fn::ImportValue:
+          !Sub "${SystemName}-VPC"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: all
+      Tags:
+        - Key: Name
+          Value: !Sub "${SystemName}-app-alb-sg"
+#-- admin-alb-sg --#
+  adminAlbSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${SystemName}-admin-alb-sg"
+      GroupDescription: !Sub "${SystemName}-admin-alb-sg"
+      VpcId:
+        Fn::ImportValue:
+          !Sub "${SystemName}-VPC"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AdminIpaddress
+          Description: AdminIpaddress
+      Tags:
+        - Key: Name
+          Value: !Sub "${SystemName}-admin-alb-sg"
+#-- app-fargate-sg --#
+  appFargateSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${SystemName}-app-fargate-sg"
+      GroupDescription: !Sub "${SystemName}-app-fargate-sg"
+      VpcId:
+        Fn::ImportValue:
+          !Sub "${SystemName}-VPC"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref appAlbSg
+          Description: !Sub "${SystemName}-app-alb-sg"
+      Tags:
+        - Key: Name
+          Value: !Sub "${SystemName}-app-fargate-sg"
+#-- admin-fargate-sg --#
+  adminFargateSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${SystemName}-admin-fargate-sg"
+      GroupDescription: !Sub "${SystemName}-admin-fargate-sg"
+      VpcId:
+        Fn::ImportValue:
+          !Sub "${SystemName}-VPC"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref adminAlbSg
+          Description: !Sub "${SystemName}-admin-alb-sg"
+      Tags:
+        - Key: Name
+          Value: !Sub "${SystemName}-admin-fargate-sg"
+#-- db-sg --#
+  dbSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${SystemName}-db-sg"
+      GroupDescription: !Sub "${SystemName}-db-sg"
+      VpcId:
+        Fn::ImportValue:
+          !Sub "${SystemName}-VPC"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref appFargateSg
+          Description: !Sub "${SystemName}-app-fargate-sg"
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref adminFargateSg
+          Description: !Sub "${SystemName}-admin-fargate-sg"
+      Tags:
+        - Key: Name
+          Value: !Sub "${SystemName}-db-sg"
+# ------------------------------------------------------------#
+# Outputs
+# ------------------------------------------------------------#
+Outputs:
+  appAlbSg:
+    Value: !Ref appAlbSg
+    Export:
+      Name: !Sub "${SystemName}-app-alb-sg"
+  adminAlbSg:
+    Value: !Ref adminAlbSg
+    Export:
+      Name: !Sub "${SystemName}-admin-alb-sg"
+  appFargateSg:
+    Value: !Ref appFargateSg
+    Export:
+      Name: !Sub "${SystemName}-app-fargate-sg"
+  adminFargateSg:
+    Value: !Ref adminFargateSg
+    Export:
+      Name: !Sub "${SystemName}-admin-fargate-sg"
+  dbSg:
+    Value: !Ref dbSg
+    Export:
+      Name: !Sub "${SystemName}-db-sg"

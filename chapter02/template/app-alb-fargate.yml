@@ -1,0 +1,189 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: App alb fargate
+
+# ------------------------------------------------------------#
+#  Parameters
+# ------------------------------------------------------------#
+Parameters:
+  SystemName:
+    Type: String
+    Description: Your System Name.
+  ImageUri:
+    Type: String
+    Description: Application Image URI
+
+Resources:
+# ------------------------------------------------------------#
+#  ALB
+# ------------------------------------------------------------#
+  appALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${SystemName}-app-alb
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+      Subnets:
+        - Fn::ImportValue:
+            !Sub ${SystemName}-PublicSubnet1a
+        - Fn::ImportValue:
+            !Sub ${SystemName}-PublicSubnet1c
+      SecurityGroups:
+        - Fn::ImportValue:
+            !Sub ${SystemName}-app-alb-sg
+
+  appAlbTg:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${SystemName}-app-alb-tg
+      Protocol: HTTP
+      Port: 80
+      TargetType: ip
+      VpcId:
+        Fn::ImportValue:
+          !Sub ${SystemName}-VPC
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /
+      HealthCheckPort: traffic-port
+      HealthyThresholdCount: 5
+      UnhealthyThresholdCount: 2
+      HealthCheckTimeoutSeconds: 5
+      HealthCheckIntervalSeconds: 30
+      Matcher:
+        HttpCode: 200
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 30
+
+  appListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref appALB
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref appAlbTg
+
+# ------------------------------------------------------------#
+#  ECS Task
+# ------------------------------------------------------------#
+  appTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ecs-tasks.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+
+  appTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${SystemName}-app-task
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      TaskRoleArn: !Ref appTaskExecutionRole
+      ExecutionRoleArn: !Ref appTaskExecutionRole
+      Cpu: 256
+      Memory: 512
+      ContainerDefinitions:
+        - Name: app
+          Image: !Ref ImageUri
+          PortMappings:
+            - Protocol: tcp
+              HostPort: 80
+              ContainerPort: 80
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Fn::ImportValue:
+                  !Sub ${SystemName}-loggroup
+              awslogs-region: !Sub "${AWS::Region}"
+              awslogs-stream-prefix: appTask
+          Environment:
+            - Name: DBHOST
+              Value:
+                Fn::ImportValue: !Sub ${SystemName}-db-endpoint
+            - Name: DB
+              Value:
+                Fn::ImportValue: !Sub ${SystemName}-db
+            - Name: DBUSER
+              Value:
+                Fn::ImportValue: !Sub ${SystemName}-db-user
+          Secrets:
+            - Name: DBPASSWORD
+              ValueFrom: !Sub ${SystemName}-DBPassword
+
+# ------------------------------------------------------------#
+#  ECS Service
+# ------------------------------------------------------------#
+  appService:
+    Type: AWS::ECS::Service
+    DependsOn: appALB
+    Properties:
+      ServiceName: !Sub ${SystemName}-app-service
+      LaunchType: FARGATE
+      Cluster:
+        Fn::ImportValue:
+          !Sub ${SystemName}-cluster
+      TaskDefinition: !Ref appTask
+      DesiredCount: 2
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 50
+        MaximumPercent: 200
+      LoadBalancers:
+        - TargetGroupArn: !Ref appAlbTg
+          ContainerName: app
+          ContainerPort: 80
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups: 
+            - Fn::ImportValue:
+                !Sub ${SystemName}-app-fargate-sg
+          Subnets: 
+            - Fn::ImportValue:
+                !Sub ${SystemName}-PrivateSubnet1a
+            - Fn::ImportValue:
+                !Sub ${SystemName}-PrivateSubnet1c
+
+# ------------------------------------------------------------#
+#  Outputs
+# ------------------------------------------------------------#
+Outputs:
+  appALB:
+    Value: !Ref appALB
+    Export:
+      Name: !Sub ${SystemName}-app-alb
+  appALBUrl:
+    Value:
+      Fn::Join:
+        - ""
+        - - http://
+          - Fn::GetAtt: appALB.DNSName
+          - /
+    Export:
+      Name: !Sub ${SystemName}-app-alb-url
+  appAlbTg:
+    Value: !Ref appAlbTg
+    Export:
+      Name: !Sub ${SystemName}-app-alb-tg
+  appTask:
+    Value: !Ref appTask
+    Export:
+      Name: !Sub ${SystemName}-app-task
+  appService:
+    Value: !Ref appService
+    Export:
+      Name: !Sub ${SystemName}-app-service

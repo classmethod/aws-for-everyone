@@ -1,0 +1,89 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RDS
+
+# ------------------------------------------------------------#
+#  Parameters
+# ------------------------------------------------------------#
+Parameters:
+  SystemName:
+    Type: String
+    Description: Your System Name.
+
+Resources:
+# ------------------------------------------------------------#
+#  ParameterGroup
+# ------------------------------------------------------------#
+  paramGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: !Sub ${SystemName} rds parameter group
+      Family: mysql8.0
+      Tags:
+        - Key: Name
+          Value: !Sub ${SystemName}-db-parametergroup
+
+# ------------------------------------------------------------#
+#  DBSubnetGroup
+# ------------------------------------------------------------#
+  dbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub ${SystemName}-db-subnetgroup
+      DBSubnetGroupDescription: !Sub ${SystemName}-db-subnetgroup
+      SubnetIds:
+        - Fn::ImportValue: !Sub ${SystemName}-PrivateSubnet2a
+        - Fn::ImportValue: !Sub ${SystemName}-PrivateSubnet2c
+      Tags:
+        - Key: Name
+          Value: !Sub ${SystemName}-db-subnetgroup
+
+# ------------------------------------------------------------#
+#  DBInstance
+# ------------------------------------------------------------#
+  db:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Sub ${SystemName}db
+      AllocatedStorage: '5'
+      DBInstanceClass: db.t3.micro
+      DBInstanceIdentifier: !Sub ${SystemName}db
+      DBSubnetGroupName: !Ref dbSubnetGroup
+      DBParameterGroupName: !Ref paramGroup
+      Engine: MySQL
+      EngineVersion: 8.0.16
+      MasterUsername: MasterUser
+      MasterUserPassword: '{{resolve:ssm-secure:handson-DBPassword:1}}'
+      MultiAZ: true
+      VPCSecurityGroups:
+        - Fn::ImportValue: !Sub ${SystemName}-db-sg
+
+
+# ------------------------------------------------------------#
+#  Outputs
+# ------------------------------------------------------------#
+Outputs:
+  paramGroup:
+    Value: !Ref paramGroup
+    Export:
+      Name: !Sub ${SystemName}-db-parametergroup
+  dbSubnetGroup:
+    Value: !Ref dbSubnetGroup
+    Export:
+      Name: !Sub ${SystemName}-db-subnetgroup
+  db:
+    Value: !Ref db
+    Export:
+      Name: !Sub ${SystemName}-db
+  dbUser:
+    Value: MasterUser
+    Export:
+      Name: !Sub ${SystemName}-db-user
+  dbEndpoint:
+    Value: !GetAtt db.Endpoint.Address
+    Export:
+      Name: !Sub ${SystemName}-db-endpoint
+  dbPort:
+    Value: !GetAtt db.Endpoint.Port
+    Export:
+      Name: !Sub ${SystemName}-db-port

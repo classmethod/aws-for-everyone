@@ -1,0 +1,41 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ECS Cluster
+
+# ------------------------------------------------------------#
+#  Parameters
+# ------------------------------------------------------------#
+Parameters:
+  SystemName:
+    Type: String
+    Description: Your System Name.
+
+Resources:
+# ------------------------------------------------------------#
+#  ECS Cluster
+# ------------------------------------------------------------#
+  ecsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${SystemName}-cluster
+      ClusterSettings:
+      - Name: containerInsights
+        Value: enabled
+  logGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /${SystemName}-loggroup
+
+
+# ------------------------------------------------------------#
+#  Outputs
+# ------------------------------------------------------------#
+Outputs:
+  ecsCluster:
+    Value: !Ref ecsCluster
+    Export:
+      Name: !Sub ${SystemName}-cluster
+  logGroup:
+    Value: !Ref logGroup
+    Export:
+      Name: !Sub ${SystemName}-loggroup

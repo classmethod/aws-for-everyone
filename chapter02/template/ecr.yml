@@ -1,0 +1,49 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ECR
+
+# ------------------------------------------------------------#
+#  Parameters
+# ------------------------------------------------------------#
+Parameters:
+  SystemName:
+    Type: String
+    Description: Your System Name.
+
+Resources:
+# ------------------------------------------------------------#
+#  ECR
+# ------------------------------------------------------------#
+  ecrPhpApp:
+    Type: AWS::ECR::Repository
+    Properties: 
+      RepositoryName: !Sub ${SystemName}-ecr-php-app
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Delete more than 20 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 20
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+
+
+# ------------------------------------------------------------#
+#  Outputs
+# ------------------------------------------------------------#
+Outputs:
+  ecrPhpApp:
+    Value: !GetAtt ecrPhpApp.Arn
+    Export:
+      Name: !Sub ${SystemName}-ecr-php-app
+

@@ -1,0 +1,180 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Admin alb fargate
+
+# ------------------------------------------------------------#
+#  Parameters
+# ------------------------------------------------------------#
+Parameters:
+  SystemName:
+    Type: String
+    Description: Your System Name.
+
+Resources:
+# ------------------------------------------------------------#
+#  ALB
+# ------------------------------------------------------------#
+  adminALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${SystemName}-admin-alb
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+      Subnets:
+        - Fn::ImportValue:
+            !Sub ${SystemName}-PublicSubnet1a
+        - Fn::ImportValue:
+            !Sub ${SystemName}-PublicSubnet1c
+      SecurityGroups:
+        - Fn::ImportValue:
+            !Sub ${SystemName}-admin-alb-sg
+
+  adminAlbTg:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${SystemName}-admin-alb-tg
+      Protocol: HTTP
+      Port: 80
+      TargetType: ip
+      VpcId:
+        Fn::ImportValue:
+          !Sub ${SystemName}-VPC
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /
+      HealthCheckPort: traffic-port
+      HealthyThresholdCount: 5
+      UnhealthyThresholdCount: 2
+      HealthCheckTimeoutSeconds: 5
+      HealthCheckIntervalSeconds: 30
+      Matcher:
+        HttpCode: 200
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 30
+
+  adminListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref adminALB
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref adminAlbTg
+
+# ------------------------------------------------------------#
+#  ECS Task
+# ------------------------------------------------------------#
+  adminTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ecs-tasks.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+
+  adminTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${SystemName}-admin-task
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      TaskRoleArn: !Ref adminTaskExecutionRole
+      ExecutionRoleArn: !Ref adminTaskExecutionRole
+      Cpu: 256
+      Memory: 512
+      ContainerDefinitions:
+        - Name: phpmyadmin
+          Image: phpmyadmin/phpmyadmin:latest
+          PortMappings:
+            - Protocol: tcp
+              HostPort: 80
+              ContainerPort: 80
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Fn::ImportValue:
+                  !Sub ${SystemName}-loggroup
+              awslogs-region: !Sub "${AWS::Region}"
+              awslogs-stream-prefix: adminTask
+          Environment:
+            - Name: PMA_HOST
+              Value:
+                Fn::ImportValue: !Sub ${SystemName}-db-endpoint
+            - Name: PMA_PORT
+              Value:
+                Fn::ImportValue: !Sub ${SystemName}-db-port
+
+# ------------------------------------------------------------#
+#  ECS Service
+# ------------------------------------------------------------#
+  adminService:
+    Type: AWS::ECS::Service
+    DependsOn: adminALB
+    Properties:
+      ServiceName: !Sub ${SystemName}-admin-service
+      LaunchType: FARGATE
+      Cluster:
+        Fn::ImportValue:
+          !Sub ${SystemName}-cluster
+      TaskDefinition: !Ref adminTask
+      DesiredCount: 1
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 50
+        MaximumPercent: 200
+      LoadBalancers:
+        - TargetGroupArn: !Ref adminAlbTg
+          ContainerName: phpmyadmin
+          ContainerPort: 80
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups: 
+            - Fn::ImportValue:
+                !Sub ${SystemName}-admin-fargate-sg
+          Subnets: 
+            - Fn::ImportValue:
+                !Sub ${SystemName}-PrivateSubnet1a
+            - Fn::ImportValue:
+                !Sub ${SystemName}-PrivateSubnet1c
+
+# ------------------------------------------------------------#
+#  Outputs
+# ------------------------------------------------------------#
+Outputs:
+  adminALB:
+    Value: !Ref adminALB
+    Export:
+      Name: !Sub ${SystemName}-admin-alb
+  adminALBUrl:
+    Value:
+      Fn::Join:
+        - ""
+        - - http://
+          - Fn::GetAtt: adminALB.DNSName
+          - /
+    Export:
+      Name: !Sub ${SystemName}-admin-alb-url
+  adminAlbTg:
+    Value: !Ref adminAlbTg
+    Export:
+      Name: !Sub ${SystemName}-admin-alb-tg
+  adminTask:
+    Value: !Ref adminTask
+    Export:
+      Name: !Sub ${SystemName}-admin-task
+  adminService:
+    Value: !Ref adminService
+    Export:
+      Name: !Sub ${SystemName}-admin-service

@@ -1,0 +1,39 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CodeCommit
+
+# ------------------------------------------------------------#
+#  Parameters
+# ------------------------------------------------------------#
+Parameters:
+  SystemName:
+    Type: String
+    Description: Your System Name.
+
+Resources:
+# ------------------------------------------------------------#
+#  CodeCommit
+# ------------------------------------------------------------#
+  codeCommitPhpApp:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName: !Sub ${SystemName}-codecommit-php-app
+      RepositoryDescription: !Sub ${SystemName}-codecommit-php-app
+
+
+# ------------------------------------------------------------#
+#  Outputs
+# ------------------------------------------------------------#
+Outputs:
+  codeCommitPhpApp:
+    Value: !Ref codeCommitPhpApp
+    Export:
+      Name: !Sub ${SystemName}-codecommit-php-app
+  codeCommitPhpAppName:
+    Value: !GetAtt codeCommitPhpApp.Name
+    Export:
+      Name: !Sub ${SystemName}-codecommit-php-app-name
+  codeCommitPhpAppArn:
+    Value: !GetAtt codeCommitPhpApp.Arn
+    Export:
+      Name: !Sub ${SystemName}-codecommit-php-app-arn
