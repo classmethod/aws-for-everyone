@@ -1,0 +1,15 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: IoT-ETL-Sample-Deploy-Bucket
+
+Resources:
+  # Lambdaコード等をデプロイするS3バケット
+  DeployBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      AccessControl: Private
+      BucketName: !Sub iot-etl-sample-deploy-bucket-${AWS::AccountId}-${AWS::Region}
+
+Outputs:
+  DeployBucketName:
+    Value: !Ref DeployBucket

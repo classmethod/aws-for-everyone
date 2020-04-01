@@ -1,0 +1,10 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: IAM User for EC2 instance
+
+Resources:
+  CircleCIUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Sub IoT-ETL-Sample-Virtual-IoT-User-VirtualEtcGate-EC2-User
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSIoTFullAccess

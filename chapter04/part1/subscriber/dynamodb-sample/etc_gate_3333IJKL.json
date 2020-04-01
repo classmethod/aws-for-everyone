@@ -1,0 +1,6 @@
+{
+    "serialNumber": {"S": "3333IJKL"},
+    "feeStationNumber": {"S": "01-406"},
+    "feeStationName": {"S": "八王子（大月方面出入口）"},
+    "gateNumber": {"N": "1"}
+}

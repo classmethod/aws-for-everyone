@@ -1,0 +1,6 @@
+{
+    "serialNumber": {"S": "2222EFGH"},
+    "feeStationNumber": {"S": "03-079"},
+    "feeStationName": {"S": "船橋"},
+    "gateNumber": {"N": "2"}
+}

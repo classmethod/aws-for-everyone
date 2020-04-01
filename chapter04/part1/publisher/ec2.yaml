@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: IoT Publisher Sample
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+  MyIPAddress:
+    Type: String
+
+Resources:
+  # EC2インスタンス
+  VirtualIoTEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-052652af12b58691f
+      KeyName: !Ref KeyName
+      SecurityGroupIds:
+        - !Ref VirtualIoTSecurityGroup
+      SubnetId: !Ref VirtualIoSubnet
+
+  # セキュリティグループ
+  VirtualIoTSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: virtual-iot-ec2-instance-security-group
+      GroupDescription: "virtual iot ec2 instance security group"
+      VpcId: !Ref VirtualIoTVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref MyIPAddress
+
+  # VPC
+  VirtualIoTVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+
+  # サブネット
+  VirtualIoSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VirtualIoTVPC
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+
+  # インターネット・ゲートウェイ
+  VirtualIoTInternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  # インターネット・ゲートウェイとVPCを紐付ける
+  VirtualIoTVPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VirtualIoTVPC
+      InternetGatewayId: !Ref VirtualIoTInternetGateway
+
+  # ルートテーブル
+  VirtualIoTRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VirtualIoTVPC
+
+  # サブネットとインターネットのルーティング
+  VirtualIoTRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref VirtualIoTRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref VirtualIoTInternetGateway
+
+  # ルートテーブルとサブネットを紐付ける
+  VirtualIoTSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VirtualIoTRouteTable
+      SubnetId: !Ref VirtualIoSubnet
+
+Outputs:
+  VirtualIoTEC2InstancePublicIp:
+    Value: !GetAtt VirtualIoTEC2Instance.PublicIp
+
+  VirtualIoTEC2InstancePublicDnsName:
+    Value: !GetAtt VirtualIoTEC2Instance.PublicDnsName

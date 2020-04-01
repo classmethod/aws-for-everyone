@@ -1,0 +1,145 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: IoT-ETL-Sample
+
+Resources:
+  # IoT Topicルール
+  EtcGateDataTopicRule:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: "etc_gate_data_topic_rule"
+      TopicRulePayload:
+        RuleDisabled: false
+        AwsIotSqlVersion: "2016-03-23"
+        Sql: "SELECT * FROM 'etc_gate/passing/car'"
+        Actions:
+          - Firehose:
+              DeliveryStreamName: !Ref EtcGateDeliveryStream
+              RoleArn: !GetAtt EtcGateDataTopicRuleRole.Arn
+
+  # IoT Topicルールに与えるIAMロール
+  EtcGateDataTopicRuleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "etc-gate-data-topic-rule-role"
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: iot.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: "etc-gate-data-topic-rule-policy"
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: firehose:PutRecord
+                Resource: !GetAtt EtcGateDeliveryStream.Arn
+
+  # Kinesis Firehose
+  EtcGateDeliveryStream:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamName: "etc-gate-data-delivery-stream"
+      DeliveryStreamType: DirectPut
+      ExtendedS3DestinationConfiguration:
+        BucketARN: !GetAtt EtcGateDataBucket.Arn
+        BufferingHints:
+          IntervalInSeconds: 60
+          SizeInMBs: 50
+        CompressionFormat: UNCOMPRESSED
+        RoleARN: !GetAtt LocationDataFirehoseDeliveryRole.Arn
+        ProcessingConfiguration:
+          Enabled: true
+          Processors:
+            - Type: Lambda
+              Parameters:
+                - ParameterName: LambdaArn
+                  ParameterValue: !Sub "${EtcGateDataTransformFunction.Arn}:$LATEST"
+                - ParameterName: BufferSizeInMBs
+                  ParameterValue: 2
+                - ParameterName: BufferIntervalInSeconds
+                  ParameterValue: 60
+
+  # Kinesis Firehoseに与えるIAMロール
+  LocationDataFirehoseDeliveryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "etc-gate-data-firehose-delivery-role"
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: firehose.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: "etc-gate-data-firehose-delivery-policy"
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                  - s3:PutObject
+                Resource: !Sub "${EtcGateDataBucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub "${EtcGateDataTransformFunction.Arn}:$LATEST"
+
+  # データを保存するS3バケット
+  EtcGateDataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      AccessControl: Private
+      BucketName: !Sub "iot-etl-sample-etc-gate-data-bucket-${AWS::AccountId}-${AWS::Region}"
+
+  # データ変換用のLambda関数
+  EtcGateDataTransformFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: etc-gate-data-transform-function
+      CodeUri: hello_world/
+      Handler: app.lambda_handler
+      Runtime: python3.7
+      Timeout: 60
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref EtcGateManagementTable
+      Environment:
+        Variables:
+          ETC_GATE_MANAGEMENT_TABLE_NAME: !Ref EtcGateManagementTable
+
+  # データ変換用のLambda関数のロググループ
+  EtcGateDataTransformFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${EtcGateDataTransformFunction}"
+
+  # DynamoDBテーブル
+  EtcGateManagementTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: etc-gate-management-table
+      PrimaryKey:
+        Name: serialNumber
+        Type: String
+
+Outputs:
+  EtcGateDataBucketName:
+    Value: !Ref EtcGateDataBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-EtcGateDataBucketName
+
+  EtcGateDataBucketArn:
+    Value: !GetAtt EtcGateDataBucket.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-EtcGateDataBucketArn
