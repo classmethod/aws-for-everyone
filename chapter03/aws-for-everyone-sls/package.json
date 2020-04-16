@@ -1,0 +1,43 @@
+{
+  "name": "aws-for-everyone-sls",
+  "version": "0.1.0",
+  "bin": {
+    "aws-for-everyone-sls": "bin/aws-for-everyone-sls.js"
+  },
+  "scripts": {
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "prebuild:frontend": "API_URL=$(npm run --silent task:getparam /BackendStack/ApiUrl) && echo \"NODE_ENV='production'\nVUE_APP_API_BASE_URL='${API_URL}'\" > ./src/frontend/.env",
+    "build": "tsc",
+    "build:backend": "GO111MODULE=off go get -v -t -d ./src/backend/persons/... && GOOS=linux GOARCH=amd64 go build -o ./src/backend/persons/persons ./src/backend/persons/**.go",
+    "build:frontend": "cd ./src/frontend/ && npm run --silent build",
+    "deploy": "npm run --silent build && npm run --silent build:backend && npm run --silent deploy:backend && npm run --silent prebuild:frontend && npm run --silent build:frontend && npm run --silent deploy:frontend",
+    "deploy:backend": "cdk deploy BackendStack",
+    "deploy:frontend": "cdk deploy FrontendStack",
+    "task:getparam": "aws ssm get-parameter --query Parameter.Value --output text --name "
+  },
+  "devDependencies": {
+    "@aws-cdk/assert": "^1.19.0",
+    "@types/jest": "^24.0.22",
+    "@types/node": "10.17.5",
+    "jest": "^24.9.0",
+    "ts-jest": "^24.1.0",
+    "aws-cdk": "^1.19.0",
+    "ts-node": "^8.1.0",
+    "typescript": "~3.7.2"
+  },
+  "dependencies": {
+    "@aws-cdk/aws-apigateway": "^1.19.0",
+    "@aws-cdk/aws-cloudfront": "^1.19.0",
+    "@aws-cdk/aws-dynamodb": "^1.19.0",
+    "@aws-cdk/aws-lambda": "^1.19.0",
+    "@aws-cdk/aws-logs": "^1.19.0",
+    "@aws-cdk/aws-s3": "^1.19.0",
+    "@aws-cdk/aws-s3-deployment": "^1.19.0",
+    "@aws-cdk/aws-ssm": "^1.19.0",
+    "@aws-cdk/core": "^1.19.0",
+    "http-method-enum": "^1.0.0",
+    "source-map-support": "^0.5.16",
+    "frontend": "file:src/frontend"
+  }
+}

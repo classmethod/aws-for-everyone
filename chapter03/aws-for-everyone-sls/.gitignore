@@ -1,0 +1,16 @@
+*.js
+!jest.config.js
+*.d.ts
+node_modules
+!src/frontend/*.js
+!src/frontend/**/*.js
+.envrc
+.env
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out
+
+#editor
+.idea/*
+*.iml
