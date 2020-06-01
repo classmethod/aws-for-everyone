@@ -96,7 +96,7 @@ Resources:
       MapPublicIpOnLaunch: 'false'
       Tags:
       - Key: Name
-        Value: !Sub ${SystemName}-Private-Subnet-2c
+        Value: !Sub ${SystemName}-Private-Subnet-2a
       VpcId: !Ref VPC
   PrivateSubnet2c:
     Type: AWS::EC2::Subnet
