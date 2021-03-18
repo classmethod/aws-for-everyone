@@ -9,11 +9,11 @@ fi
 
 # 指定パラメータ
 SYSTEM_NAME=handson
-TENPLATE=app-alb-fargate
+TEMPLATE=app-alb-fargate
 
 # テンプレート実行用パラメータ
-CFN_STACK_NAME=${SYSTEM_NAME}-${TENPLATE}
-CFN_TEMPLATE=template/${TENPLATE}.yml
+CFN_STACK_NAME=${SYSTEM_NAME}-${TEMPLATE}
+CFN_TEMPLATE=template/${TEMPLATE}.yml
 ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 IMAGE_URI=${ACCOUNT_ID}.dkr.ecr.ap-northeast-1.amazonaws.com/${SYSTEM_NAME}-ecr-php-app
 

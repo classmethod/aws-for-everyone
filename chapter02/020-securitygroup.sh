@@ -9,7 +9,7 @@ fi
 
 # 指定パラメータ
 SYSTEM_NAME=handson
-TENPLATE=securitygroup
+TEMPLATE=securitygroup
 
 # 指定必須パラメータ
 # 実施環境のグローバルIPアドレスを'curl inet-ip.info'などを利用して、以下に指定してください。
@@ -22,8 +22,8 @@ if [ -z "${ADMIN_IPADDRESS}" ]; then
 fi
 
 # テンプレート実行用パラメータ
-CFN_STACK_NAME=${SYSTEM_NAME}-${TENPLATE}
-CFN_TEMPLATE=template/${TENPLATE}.yml
+CFN_STACK_NAME=${SYSTEM_NAME}-${TEMPLATE}
+CFN_TEMPLATE=template/${TEMPLATE}.yml
 
 # テンプレートの実行
 aws cloudformation deploy --stack-name ${CFN_STACK_NAME} --template-file ${CFN_TEMPLATE} ${CHANGESET_OPTION} \
