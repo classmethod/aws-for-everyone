@@ -1,0 +1,31 @@
+CREATE EXTERNAL TABLE IF NOT EXISTS waflogs
+(
+`timestamp` bigint,
+formatVersion int,
+webaclId string,
+terminatingRuleId string,
+terminatingRuleType string,
+action string,
+httpSourceName string,
+httpSourceId string,
+ruleGroupList array < struct <
+    ruleGroupId: string,
+    terminatingRule: string,
+    nonTerminatingMatchingRules: array < struct < action: string, ruleId: string > >,
+    excludedRules: array < struct < exclusionType: string, ruleId: string > >
+> >,
+rateBasedRuleList array < struct < rateBasedRuleId: string, limitKey: string, maxRateAllowed: int > >,
+nonTerminatingMatchingRules array < struct < action: string, ruleId: string > >,
+httpRequest struct <
+    clientIp: string,
+    country: string,
+    headers: array < struct < name: string, value: string > >,
+    uri: string,
+    args: string,
+    httpVersion: string,
+    httpMethod: string,
+    requestId: string
+>
+)
+ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+LOCATION 's3://[バケット名]/';
